@@ -1,0 +1,1662 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="タロット">
+<meta name="theme-color" content="#0d0d1a">
+<title>タロット占い — ケルト十字法</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=Shippori+Mincho:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+  :root {
+    --card-w: 90px;
+    --card-h: 150px;
+    --gold: #c9a84c;
+    --bg: #0d0d1a;
+    --surface: #1a1a2e;
+    --border: #2a2a4a;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: #e8e0d0;
+    font-family: 'Hiragino Mincho ProN', 'Yu Mincho', Georgia, serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: max(24px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(48px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+    -webkit-text-size-adjust: 100%;
+    -webkit-tap-highlight-color: rgba(201,168,76,0.2);
+  }
+
+  button { touch-action: manipulation; min-height: 44px; }
+  input, textarea, select { -webkit-appearance: none; border-radius: 6px; }
+
+  h1 {
+    font-size: 1.6rem;
+    letter-spacing: 0.2em;
+    color: var(--gold);
+    margin-bottom: 8px;
+    text-align: center;
+  }
+
+  .subtitle {
+    font-size: 0.85rem;
+    color: #888;
+    margin-bottom: 28px;
+    letter-spacing: 0.1em;
+  }
+
+  #btn-shuffle {
+    background: linear-gradient(135deg, #2a1f0e, #4a3520);
+    border: 1px solid var(--gold);
+    color: var(--gold);
+    font-family: inherit;
+    font-size: 1rem;
+    letter-spacing: 0.15em;
+    padding: 12px 36px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.25s;
+    margin-bottom: 36px;
+  }
+  #btn-shuffle:hover { background: linear-gradient(135deg, #3a2f1e, #6a4530); box-shadow: 0 0 12px rgba(201,168,76,0.35); }
+  #btn-shuffle:active { transform: scale(0.97); }
+
+  /* ======= ケルト十字レイアウト ======= */
+  #spread {
+    display: none;
+    width: 100%;
+    max-width: 760px;
+  }
+
+  .spread-inner {
+    display: grid;
+    /* 左ブロック(十字) + 右ブロック(縦列) */
+    grid-template-columns: 1fr auto;
+    gap: 24px;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* 左: 3×3 グリッド、中央3セルが十字 */
+  .cross-grid {
+    display: grid;
+    grid-template-columns: repeat(3, var(--card-w));
+    grid-template-rows: repeat(3, var(--card-h));
+    gap: 8px;
+    justify-content: center;
+  }
+
+  /* 右: 縦4枚 */
+  .staff-grid {
+    display: grid;
+    grid-template-columns: var(--card-w);
+    grid-template-rows: repeat(4, var(--card-h));
+    gap: 8px;
+  }
+
+  /* ======= カード共通 ======= */
+  .card-slot {
+    width: var(--card-w);
+    height: var(--card-h);
+    position: relative;
+  }
+
+  /* 十字中央: カード1+2を重ねる専用スロット */
+  .card-slot.overlay {
+    grid-column: 2;
+    grid-row: 2;
+  }
+
+  /* カードビジュアル */
+  .card {
+    width: var(--card-w);
+    height: var(--card-h);
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    font-size: 0.62rem;
+    color: #ccc;
+    padding: 4px;
+    overflow: hidden;
+    position: absolute;
+    top: 0; left: 0;
+    transition: transform 0.3s, box-shadow 0.3s;
+    cursor: pointer;
+  }
+
+  .card:hover { box-shadow: 0 0 14px rgba(201,168,76,0.45); z-index: 10; }
+
+  .card img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 5px;
+    display: block;
+  }
+
+  /* 画像が読み込めない場合のフォールバック表示 */
+  .card .card-fallback {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    width: 100%;
+    height: 100%;
+  }
+
+  .card .card-number {
+    font-size: 0.75rem;
+    color: var(--gold);
+    font-weight: bold;
+  }
+
+  .card .card-name-text {
+    font-size: 0.58rem;
+    line-height: 1.3;
+    word-break: break-all;
+    color: #e0d8c8;
+  }
+
+  /* カード2: カード1の上部1/3に横向きで重ねる（カード1の下部2/3が見える） */
+  .card.crossing {
+    transform-origin: center center;
+    top: 50%;
+    left: 50%;
+    margin-top: calc(var(--card-h) / -2);
+    margin-left: calc(var(--card-w) / -2);
+    opacity: 0.92;
+    /* rotate 後に上方向へシフト: card_h/6 + card_w/2 */
+    transform: translateY(calc(var(--card-h) / 6 + var(--card-w) / 2)) rotate(90deg);
+  }
+
+  /* 位置ラベル */
+  .pos-label {
+    position: absolute;
+    bottom: -18px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 0.58rem;
+    color: var(--gold);
+    white-space: nowrap;
+    letter-spacing: 0.05em;
+  }
+
+  /* グリッド配置 */
+  .slot-crown   { grid-column: 2; grid-row: 1; }
+  .slot-past    { grid-column: 1; grid-row: 2; }
+  .slot-future  { grid-column: 3; grid-row: 2; }
+  .slot-foundation { grid-column: 2; grid-row: 3; }
+
+  /* スタッフ（右縦列）: 下から7,8,9,10 */
+  .slot-s7 { grid-row: 4; }
+  .slot-s8 { grid-row: 3; }
+  .slot-s9 { grid-row: 2; }
+  .slot-s10 { grid-row: 1; }
+
+  /* アニメーション */
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .card-slot { animation: fadeIn 0.4s ease both; }
+  .card-slot:nth-child(1) { animation-delay: 0.05s; }
+  .card-slot:nth-child(2) { animation-delay: 0.12s; }
+  .card-slot:nth-child(3) { animation-delay: 0.19s; }
+  .card-slot:nth-child(4) { animation-delay: 0.26s; }
+  .card-slot:nth-child(5) { animation-delay: 0.33s; }
+  .card-slot:nth-child(6) { animation-delay: 0.40s; }
+  .card-slot:nth-child(7) { animation-delay: 0.47s; }
+  .card-slot:nth-child(8) { animation-delay: 0.54s; }
+  .card-slot:nth-child(9) { animation-delay: 0.61s; }
+  .card-slot:nth-child(10){ animation-delay: 0.68s; }
+
+  /* ====== 詳細パネル ====== */
+  #detail {
+    display: none;
+    margin-top: 36px;
+    max-width: 520px;
+    width: 100%;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 20px 24px;
+  }
+
+  #detail h2 { color: var(--gold); font-size: 1.1rem; margin-bottom: 6px; }
+  #detail .pos-name { font-size: 0.8rem; color: #888; margin-bottom: 10px; }
+  #detail .meaning { font-size: 0.88rem; line-height: 1.8; }
+
+  /* ====== 相談入力エリア ====== */
+  .query-section {
+    width: 100%;
+    max-width: 520px;
+    margin-bottom: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .query-section label {
+    font-size: 0.85rem;
+    color: var(--gold);
+    letter-spacing: 0.1em;
+  }
+
+  .query-section textarea {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: #e8e0d0;
+    font-family: inherit;
+    font-size: 0.9rem;
+    line-height: 1.7;
+    padding: 10px 14px;
+    resize: vertical;
+    min-height: 80px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .query-section textarea:focus { border-color: var(--gold); }
+
+  /* ====== APIキー入力 ====== */
+  .api-section {
+    width: 100%;
+    max-width: 520px;
+    margin-bottom: 28px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .api-section label {
+    font-size: 0.78rem;
+    color: #888;
+    letter-spacing: 0.08em;
+  }
+
+  .api-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .api-section input[type="password"],
+  .api-section input[type="text"] {
+    flex: 1;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: #e8e0d0;
+    font-family: monospace;
+    font-size: 0.82rem;
+    padding: 8px 12px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .api-section input:focus { border-color: var(--gold); }
+
+  .btn-toggle-key {
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: #888;
+    cursor: pointer;
+    font-size: 0.75rem;
+    padding: 6px 10px;
+    white-space: nowrap;
+    transition: color 0.2s, border-color 0.2s;
+  }
+  .btn-toggle-key:hover { color: var(--gold); border-color: var(--gold); }
+
+  .api-hint {
+    font-size: 0.72rem;
+    color: #666;
+  }
+
+  #model-select {
+    flex: 1;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: #e8e0d0;
+    font-family: inherit;
+    font-size: 0.82rem;
+    padding: 7px 10px;
+    outline: none;
+    cursor: pointer;
+  }
+  #model-select:focus { border-color: var(--gold); }
+
+  /* ====== AIリーディングボタン ====== */
+  #btn-ai-reading {
+    display: none;
+    margin-top: 28px;
+    background: linear-gradient(135deg, #0e1a2a, #1a3050);
+    border: 1px solid #4a8abf;
+    color: #7bbfef;
+    font-family: inherit;
+    font-size: 1rem;
+    letter-spacing: 0.15em;
+    padding: 12px 36px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.25s;
+  }
+  #btn-copy-prompt {
+    background: linear-gradient(135deg, #0e1f0e, #1a3a1a);
+    border: 1px solid #4abf6a;
+    color: #7bef9f;
+    font-family: inherit;
+    font-size: 0.95rem;
+    letter-spacing: 0.1em;
+    padding: 11px 30px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.25s;
+  }
+  #btn-copy-prompt:hover { box-shadow: 0 0 12px rgba(74,191,106,0.4); }
+
+  #btn-ai-reading:hover { background: linear-gradient(135deg, #1a2a3a, #2a4a70); box-shadow: 0 0 12px rgba(74,138,191,0.4); }
+  #btn-ai-reading:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  /* ====== AIリーディング結果 ====== */
+  #ai-result-section {
+    display: none;
+    width: 100%;
+    max-width: 760px;
+    margin-top: 36px;
+  }
+
+  .ai-result-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .ai-result-header h2 {
+    color: #7bbfef;
+    font-size: 1rem;
+    letter-spacing: 0.1em;
+  }
+
+  .btn-copy {
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: #888;
+    cursor: pointer;
+    font-size: 0.78rem;
+    padding: 5px 14px;
+    transition: color 0.2s, border-color 0.2s;
+  }
+  .btn-copy:hover { color: var(--gold); border-color: var(--gold); }
+
+  #ai-result-textarea {
+    width: 100%;
+    min-height: 480px;
+    background: var(--surface);
+    border: 1px solid #2a3a5a;
+    border-radius: 8px;
+    color: #e8e0d0;
+    font-family: 'Hiragino Mincho ProN', 'Yu Mincho', Georgia, serif;
+    font-size: 0.9rem;
+    line-height: 1.9;
+    padding: 20px 22px;
+    resize: vertical;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  #ai-result-textarea:focus { border-color: #4a8abf; }
+
+  /* ローディング */
+  .loading-row {
+    display: none;
+    align-items: center;
+    gap: 12px;
+    margin-top: 16px;
+    color: #7bbfef;
+    font-size: 0.88rem;
+  }
+
+  .spinner {
+    width: 18px;
+    height: 18px;
+    border: 2px solid #2a3a5a;
+    border-top-color: #7bbfef;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    flex-shrink: 0;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .error-msg {
+    display: none;
+    margin-top: 12px;
+    padding: 10px 14px;
+    background: #2a1018;
+    border: 1px solid #8a2030;
+    border-radius: 6px;
+    color: #ef8888;
+    font-size: 0.85rem;
+  }
+
+  /* ====== 鑑定書プレビュー ====== */
+  #btn-generate-cert {
+    display: none;
+    margin-top: 28px;
+    background: linear-gradient(135deg, #3a2a0e, #5a4020);
+    border: 1px solid var(--gold);
+    color: var(--gold);
+    font-family: inherit;
+    font-size: 1rem;
+    letter-spacing: 0.2em;
+    padding: 13px 40px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.25s;
+  }
+  #btn-generate-cert:hover { box-shadow: 0 0 16px rgba(201,168,76,0.5); transform: translateY(-1px); }
+
+  #cert-section { display: none; margin-top: 40px; width: 100%; }
+
+  .cert-actions {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+  }
+
+  .cert-actions button {
+    background: linear-gradient(135deg, #0e1a2a, #1a3050);
+    border: 1px solid #4a8abf;
+    color: #7bbfef;
+    font-family: inherit;
+    font-size: 0.9rem;
+    letter-spacing: 0.1em;
+    padding: 10px 22px;
+    border-radius: 4px;
+    cursor: pointer;
+  }
+  .cert-actions button:hover { box-shadow: 0 0 10px rgba(74,138,191,0.4); }
+  .cert-actions button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  /* A4: 210mm × 297mm = 794px × 1123px at 96dpi */
+  #certificate {
+    width: 794px;
+    min-height: 1123px;
+    margin: 0 auto;
+    background: linear-gradient(180deg, #faf6ec 0%, #f4ecd6 100%);
+    color: #2a1f10;
+    padding: 60px 56px 56px;
+    position: relative;
+    font-family: 'Shippori Mincho', 'Hiragino Mincho ProN', 'Yu Mincho', serif;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+    overflow: hidden;
+  }
+
+  /* 二重の装飾枠 */
+  #certificate::before {
+    content: '';
+    position: absolute;
+    top: 18px; left: 18px; right: 18px; bottom: 18px;
+    border: 2px solid #b8963c;
+    pointer-events: none;
+  }
+  #certificate::after {
+    content: '';
+    position: absolute;
+    top: 26px; left: 26px; right: 26px; bottom: 26px;
+    border: 1px solid #b8963c;
+    pointer-events: none;
+  }
+
+  /* コーナー装飾 */
+  .cert-corner {
+    position: absolute;
+    width: 48px;
+    height: 48px;
+    border: 2px solid #8a6a1c;
+  }
+  .cert-corner.tl { top: 34px; left: 34px; border-right: none; border-bottom: none; }
+  .cert-corner.tr { top: 34px; right: 34px; border-left: none; border-bottom: none; }
+  .cert-corner.bl { bottom: 34px; left: 34px; border-right: none; border-top: none; }
+  .cert-corner.br { bottom: 34px; right: 34px; border-left: none; border-top: none; }
+
+  .cert-header {
+    text-align: center;
+    padding: 20px 0 14px;
+    position: relative;
+    z-index: 1;
+  }
+
+  .cert-emblem {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 1.1rem;
+    letter-spacing: 0.5em;
+    color: #8a6a1c;
+    margin-bottom: 8px;
+  }
+
+  .cert-title-en {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 1.35rem;
+    letter-spacing: 0.35em;
+    color: #5a4220;
+    font-weight: 500;
+    margin-bottom: 6px;
+  }
+
+  .cert-title-jp {
+    font-size: 2rem;
+    letter-spacing: 0.3em;
+    font-weight: 600;
+    color: #2a1a08;
+    margin-bottom: 14px;
+  }
+
+  .cert-divider {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    margin: 4px auto 10px;
+    color: #b8963c;
+  }
+  .cert-divider::before,
+  .cert-divider::after {
+    content: '';
+    flex: 0 0 80px;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, #b8963c, transparent);
+  }
+  .cert-divider-mark {
+    font-size: 0.85rem;
+    color: #b8963c;
+    letter-spacing: 0.4em;
+  }
+
+  .cert-date {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 0.88rem;
+    color: #6a4e2a;
+    letter-spacing: 0.2em;
+    margin-top: 6px;
+  }
+
+  .cert-query-block {
+    margin: 24px 0 20px;
+    padding: 14px 20px;
+    background: rgba(184, 150, 60, 0.08);
+    border-left: 3px solid #b8963c;
+    position: relative;
+    z-index: 1;
+  }
+  .cert-query-label {
+    font-size: 0.78rem;
+    color: #8a6a1c;
+    letter-spacing: 0.25em;
+    margin-bottom: 6px;
+  }
+  .cert-query-text {
+    font-size: 0.95rem;
+    line-height: 1.7;
+    color: #2a1a08;
+  }
+
+  /* プレビュー内のケルト十字 (A4に合わせて縮小) */
+  .cert-spread-wrapper {
+    --card-w: 68px;
+    --card-h: 113px;
+    margin: 18px auto 24px;
+    display: flex;
+    justify-content: center;
+    gap: 18px;
+    position: relative;
+    z-index: 1;
+  }
+
+  .cert-cross-grid {
+    display: grid;
+    grid-template-columns: repeat(3, var(--card-w));
+    grid-template-rows: repeat(3, var(--card-h));
+    gap: 6px;
+  }
+  .cert-staff-grid {
+    display: grid;
+    grid-template-columns: var(--card-w);
+    grid-template-rows: repeat(4, var(--card-h));
+    gap: 6px;
+  }
+
+  .cert-card-slot {
+    width: var(--card-w);
+    height: var(--card-h);
+    position: relative;
+  }
+  .cert-card {
+    width: 100%;
+    height: 100%;
+    border-radius: 4px;
+    border: 1px solid #8a6a1c;
+    background: #faf6ec;
+    position: absolute;
+    top: 0; left: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 4px;
+    overflow: hidden;
+  }
+  .cert-card img { width: 100%; height: 100%; object-fit: cover; }
+  .cert-card .cert-card-fb {
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    width: 100%; height: 100%; gap: 3px;
+  }
+  .cert-card .cert-card-fb .cn {
+    font-size: 0.58rem; color: #8a6a1c; font-weight: bold;
+  }
+  .cert-card .cert-card-fb .cname {
+    font-size: 0.54rem; color: #2a1a08; text-align: center; line-height: 1.25;
+  }
+  .cert-card.crossing {
+    top: 50%; left: 50%;
+    margin-top: calc(var(--card-h) / -2);
+    margin-left: calc(var(--card-w) / -2);
+    transform: translateY(calc(var(--card-h) / 6 + var(--card-w) / 2)) rotate(90deg);
+  }
+  .cert-pos-label {
+    position: absolute;
+    bottom: -14px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 0.54rem;
+    color: #8a6a1c;
+    letter-spacing: 0.05em;
+    white-space: nowrap;
+  }
+
+  /* リーディング本文 */
+  .cert-reading {
+    margin-top: 20px;
+    position: relative;
+    z-index: 1;
+  }
+  .cert-section {
+    margin-bottom: 18px;
+  }
+  .cert-section h3 {
+    font-size: 1.05rem;
+    color: #2a1a08;
+    letter-spacing: 0.2em;
+    margin-bottom: 8px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid #b8963c;
+    display: inline-block;
+    padding-right: 30px;
+  }
+  .cert-section h3::before {
+    content: '✦ ';
+    color: #b8963c;
+    margin-right: 6px;
+  }
+  .cert-section p {
+    font-size: 0.92rem;
+    line-height: 1.95;
+    color: #2a1a08;
+    white-space: pre-wrap;
+  }
+
+  .cert-footer {
+    margin-top: 30px;
+    text-align: center;
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 0.78rem;
+    color: #8a6a1c;
+    letter-spacing: 0.3em;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* レスポンシブ */
+  @media (max-width: 560px) {
+    :root { --card-w: 68px; --card-h: 113px; }
+    .spread-inner { gap: 12px; }
+    .cross-grid { gap: 5px; }
+    .staff-grid { gap: 5px; }
+
+    /* iOS: フォーカス時の自動ズームを防ぐため 16px 以上に */
+    .query-section textarea,
+    .api-section input[type="password"],
+    .api-section input[type="text"],
+    #model-select,
+    #ai-result-textarea,
+    #prompt-textarea {
+      font-size: 16px;
+    }
+
+    /* ボタンを押しやすく */
+    #btn-shuffle, #btn-ai-reading, #btn-copy-prompt, #btn-generate-cert {
+      width: 100%;
+      max-width: 360px;
+      padding: 14px 20px;
+    }
+
+    /* 鑑定書はA4固定幅 → スマホでは横スクロール可能な枠で包む */
+    #cert-scroll {
+      width: 100%;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      padding-bottom: 8px;
+    }
+    /* ピンチズームで拡大しやすいよう縮小表示 */
+    #certificate {
+      transform: scale(0.46);
+      transform-origin: top left;
+      margin-bottom: calc(1123px * -0.54);
+    }
+    #cert-scroll::after {
+      content: '← 左右スワイプで全体確認・PDFで原寸保存 →';
+      display: block;
+      text-align: center;
+      font-size: 0.7rem;
+      color: #888;
+      margin-top: 8px;
+    }
+  }
+
+  @media (max-width: 380px) {
+    :root { --card-w: 58px; --card-h: 96px; }
+    h1 { font-size: 1.35rem; }
+  }
+
+  /* タッチ機器ではホバーではなくアクティブで反応 */
+  @media (hover: none) {
+    .card:active { box-shadow: 0 0 14px rgba(201,168,76,0.45); }
+    #btn-shuffle:active, #btn-ai-reading:active, #btn-copy-prompt:active, #btn-generate-cert:active {
+      transform: scale(0.97);
+    }
+  }
+
+  /* シェアボタン（iOS で写真保存や共有シートを開く） */
+  #btn-share {
+    display: none;
+    background: linear-gradient(135deg, #2a0e2a, #4a204a);
+    border: 1px solid #bf4abf;
+    color: #ef7bef;
+    font-family: inherit;
+    font-size: 0.95rem;
+    letter-spacing: 0.1em;
+    padding: 11px 26px;
+    border-radius: 4px;
+    cursor: pointer;
+  }
+  #btn-share:hover { box-shadow: 0 0 12px rgba(191,74,191,0.4); }
+</style>
+</head>
+<body>
+
+<h1>✦ タロット占い ✦</h1>
+<p class="subtitle">ケルト十字法 — 10枚展開</p>
+
+<!-- 相談内容入力 -->
+<div class="query-section">
+  <label for="user-query">相談内容</label>
+  <textarea id="user-query" placeholder="例: 転職を考えています。今の職場を辞めて新しい道に進むべきでしょうか？"></textarea>
+</div>
+
+<!-- Gemini APIキー -->
+<div class="api-section">
+  <label for="api-key-input">Gemini API キー</label>
+  <div class="api-row">
+    <input type="password" id="api-key-input" placeholder="AIza..." autocomplete="off">
+    <button class="btn-toggle-key" onclick="toggleKeyVisibility()">表示</button>
+  </div>
+  <div class="api-row" style="margin-top:6px;">
+    <label for="model-select" style="font-size:0.78rem;color:#888;white-space:nowrap;">モデル</label>
+    <select id="model-select">
+      <option value="gemini-1.5-flash">gemini-1.5-flash（無料枠あり・推奨）</option>
+      <option value="gemini-1.5-pro">gemini-1.5-pro（無料枠あり・高精度）</option>
+      <option value="gemini-2.0-flash">gemini-2.0-flash（有料プラン向け）</option>
+    </select>
+  </div>
+  <span class="api-hint">キーはブラウザのlocalStorageに保存されます。外部には送信されません。</span>
+</div>
+
+<button id="btn-shuffle" onclick="doReading()">カードを引く</button>
+
+<section id="spread">
+  <div class="spread-inner">
+    <!-- 左: ケルト十字 -->
+    <div class="cross-grid" id="cross-grid"></div>
+    <!-- 右: スタッフ縦列 -->
+    <div class="staff-grid" id="staff-grid"></div>
+  </div>
+</section>
+
+<div id="detail">
+  <h2 id="detail-name"></h2>
+  <div class="pos-name" id="detail-pos"></div>
+  <div class="meaning" id="detail-meaning"></div>
+</div>
+
+<!-- AIリーディングボタン群 -->
+<div id="ai-btn-group" style="display:none; flex-direction:column; align-items:center; gap:12px; margin-top:28px;">
+
+  <!-- 自動生成 -->
+  <button id="btn-ai-reading" onclick="doAIReading()">✦ Gemini でリーディングを生成（API）</button>
+
+  <!-- 手動用：プロンプト表示 -->
+  <button id="btn-copy-prompt" onclick="showPrompt()">📋 プロンプトを表示する（手動コピー用）</button>
+  <span style="font-size:0.75rem;color:#888;">↑ 表示されたプロンプトを全選択コピー → <a href="https://gemini.google.com" target="_blank" style="color:#7bbfef;">gemini.google.com</a> に貼り付け → 結果を下のテキストエリアに貼り戻し</span>
+</div>
+
+<!-- プロンプト表示エリア -->
+<div id="prompt-section" style="display:none; width:100%; max-width:760px; margin-top:28px;">
+  <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; flex-wrap:wrap; gap:8px;">
+    <h2 style="color:#7bef9f; font-size:1rem; letter-spacing:0.1em;">✦ Gemini に貼り付けるプロンプト</h2>
+    <button class="btn-copy" onclick="selectPromptText()">全選択</button>
+  </div>
+  <textarea id="prompt-textarea" spellcheck="false" readonly style="width:100%; min-height:260px; background:var(--surface); border:1px solid #2a5a3a; border-radius:8px; color:#e8e0d0; font-family:monospace; font-size:0.82rem; line-height:1.7; padding:16px 18px; resize:vertical; outline:none;"></textarea>
+</div>
+
+<div class="loading-row" id="loading-row">
+  <div class="spinner"></div>
+  <span>Gemini がリーディングを生成中です…</span>
+</div>
+<div class="error-msg" id="error-msg"></div>
+
+<!-- AIリーディング結果（編集可能テキストエリア） -->
+<div id="ai-result-section">
+  <div class="ai-result-header">
+    <h2>✦ リーディング結果（編集可能）</h2>
+    <button class="btn-copy" onclick="copyResult()">テキストをコピー</button>
+  </div>
+  <textarea id="ai-result-textarea" spellcheck="false"></textarea>
+</div>
+
+<!-- 鑑定書生成ボタン -->
+<button id="btn-generate-cert" onclick="generateCertificate()">✦ 鑑定書プレビューを作成</button>
+
+<!-- 鑑定書プレビュー & PDF出力 -->
+<section id="cert-section">
+  <div class="cert-actions">
+    <button id="btn-download-pdf" onclick="downloadPDF()">📄 PDF としてダウンロード</button>
+    <button id="btn-share" onclick="shareCertificate()">📱 画像で共有・保存</button>
+    <button onclick="generateCertificate()">🔄 プレビューを更新</button>
+  </div>
+
+  <div id="cert-scroll">
+  <div id="certificate">
+    <div class="cert-corner tl"></div>
+    <div class="cert-corner tr"></div>
+    <div class="cert-corner bl"></div>
+    <div class="cert-corner br"></div>
+
+    <header class="cert-header">
+      <div class="cert-emblem">✦ ✦ ✦</div>
+      <div class="cert-title-en">TAROT READING CERTIFICATE</div>
+      <div class="cert-title-jp">鑑　定　書</div>
+      <div class="cert-divider">
+        <span class="cert-divider-mark">✦ CELTIC CROSS ✦</span>
+      </div>
+      <div class="cert-date" id="cert-date"></div>
+    </header>
+
+    <div class="cert-query-block">
+      <div class="cert-query-label">ご相談内容</div>
+      <div class="cert-query-text" id="cert-query"></div>
+    </div>
+
+    <div class="cert-spread-wrapper">
+      <div class="cert-cross-grid" id="cert-cross-grid"></div>
+      <div class="cert-staff-grid" id="cert-staff-grid"></div>
+    </div>
+
+    <div class="cert-reading" id="cert-reading"></div>
+
+    <div class="cert-footer">— FIN —</div>
+  </div>
+  </div>
+</section>
+
+<script>
+// ============================================================
+// 1. カードデータ (78枚)
+// ============================================================
+
+const SUITS = ['wands', 'cups', 'swords', 'pentacles'];
+const SUIT_JA = { wands:'ワンズ', cups:'カップス', swords:'ソーズ', pentacles:'ペンタクルズ' };
+const RANK_NAMES = ['', 'エース', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'ペイジ', 'ナイト', 'クイーン', 'キング'];
+const RANK_SLUGS = ['', 'ace', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'page', 'knight', 'queen', 'king'];
+
+const MAJOR_DATA = [
+  { num: 0,  slug: 'fool',           name: '愚者',         meaning: '新しい始まり、自由、無邪気さ、冒険への一歩。' },
+  { num: 1,  slug: 'magician',       name: '魔術師',       meaning: '意志力、技術、自信、創造的な力の発揮。' },
+  { num: 2,  slug: 'high_priestess', name: '女教皇',       meaning: '直感、神秘、内なる知恵、潜在意識。' },
+  { num: 3,  slug: 'empress',        name: '女帝',         meaning: '豊かさ、繁栄、母性、創造性、自然との調和。' },
+  { num: 4,  slug: 'emperor',        name: '皇帝',         meaning: '権威、安定、秩序、父性的な保護と支配。' },
+  { num: 5,  slug: 'hierophant',     name: '法王',         meaning: '伝統、精神的指導、制度、信仰、学習。' },
+  { num: 6,  slug: 'lovers',         name: '恋人たち',     meaning: '愛、選択、調和、価値観の一致、関係性。' },
+  { num: 7,  slug: 'chariot',        name: '戦車',         meaning: '勝利、意志力、前進、克服、自制心。' },
+  { num: 8,  slug: 'strength',       name: '力',           meaning: '内なる強さ、忍耐、勇気、感情のコントロール。' },
+  { num: 9,  slug: 'hermit',         name: '隠者',         meaning: '内省、孤独、精神的探求、知恵、慎重さ。' },
+  { num: 10, slug: 'wheel_fortune',  name: '運命の輪',     meaning: '変化、巡り合わせ、転換点、運命の流れ。' },
+  { num: 11, slug: 'justice',        name: '正義',         meaning: '公平、真実、均衡、法、因果応報。' },
+  { num: 12, slug: 'hanged_man',     name: '吊るされた男', meaning: '一時停止、犠牲、視点の変化、解放への待機。' },
+  { num: 13, slug: 'death',          name: '死神',         meaning: '終わりと始まり、変容、手放し、変革。' },
+  { num: 14, slug: 'temperance',     name: '節制',         meaning: '調和、バランス、癒し、中庸、統合。' },
+  { num: 15, slug: 'devil',          name: '悪魔',         meaning: '束縛、執着、物質主義、誘惑、影の自己。' },
+  { num: 16, slug: 'tower',          name: '塔',           meaning: '崩壊、突然の変化、啓示、古い構造の破壊。' },
+  { num: 17, slug: 'star',           name: '星',           meaning: '希望、再生、インスピレーション、精神的な癒し。' },
+  { num: 18, slug: 'moon',           name: '月',           meaning: '幻想、不安、潜在意識、夢、不確かな状況。' },
+  { num: 19, slug: 'sun',            name: '太陽',         meaning: '喜び、成功、活力、明るさ、子どものような純粋さ。' },
+  { num: 20, slug: 'judgement',      name: '審判',         meaning: '覚醒、再評価、赦し、新たな召命、変革。' },
+  { num: 21, slug: 'world',          name: '世界',         meaning: '完成、統合、成就、旅の終わり、宇宙との一体感。' },
+];
+
+function buildDeck() {
+  const deck = [];
+
+  // 大アルカナ 22枚
+  for (const m of MAJOR_DATA) {
+    deck.push({
+      id: `major_${String(m.num).padStart(2,'0')}`,
+      name: `${m.name}`,
+      suitName: '大アルカナ',
+      image: `images/major_${String(m.num).padStart(2,'0')}_${m.slug}.png`,
+      meaning: m.meaning,
+    });
+  }
+
+  // 小アルカナ 56枚 (4スート × 14ランク)
+  for (const suit of SUITS) {
+    for (let r = 1; r <= 14; r++) {
+      const id = `${suit}_${String(r).padStart(2,'0')}`;
+      deck.push({
+        id,
+        name: `${SUIT_JA[suit]} ${RANK_NAMES[r]}`,
+        suitName: `小アルカナ — ${SUIT_JA[suit]}`,
+        image: `images/${suit}_${String(r).padStart(2,'0')}_${RANK_SLUGS[r]}.png`,
+        meaning: `${SUIT_JA[suit]}の${RANK_NAMES[r]}。カードが持つエネルギーが現在の状況に働きかけています。`,
+      });
+    }
+  }
+
+  return deck;
+}
+
+const DECK = buildDeck(); // 78枚
+
+// ============================================================
+// 2. シャッフルと10枚選択 (Fisher–Yates)
+// ============================================================
+
+function shuffle(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+function drawTen() {
+  return shuffle(DECK).slice(0, 10);
+}
+
+// ============================================================
+// 3. ケルト十字 ポジション定義
+// ============================================================
+
+const POSITIONS = [
+  { num: 1,  label: '①現状',         desc: '質問者の現在の状況・問題の核心' },
+  { num: 2,  label: '②障害',         desc: 'それを横切るもの・障害・助力' },
+  { num: 3,  label: '③基盤',         desc: '問題の根底・過去からの影響' },
+  { num: 4,  label: '④過去',         desc: '直近の過去・遠ざかりつつあること' },
+  { num: 5,  label: '⑤可能性',       desc: '最良の結果・顕在意識の目標' },
+  { num: 6,  label: '⑥近い未来',     desc: '近く起こること・流れの方向' },
+  { num: 7,  label: '⑦自己',         desc: '質問者自身の内面・態度' },
+  { num: 8,  label: '⑧外的影響',     desc: '周囲の環境・他者の影響' },
+  { num: 9,  label: '⑨希望・恐怖',   desc: '望んでいること・恐れていること' },
+  { num: 10, label: '⑩最終結果',     desc: '総合的な結末・将来への指針' },
+];
+
+// ============================================================
+// 4. カードスロット生成ヘルパー
+// ============================================================
+
+function makeCard(card, posIdx, isCrossing = false) {
+  const pos = POSITIONS[posIdx];
+  const slot = document.createElement('div');
+  slot.className = 'card-slot';
+
+  // 背景カード（クロッシングの場合は下にカード1が既にある）
+  const cardEl = document.createElement('div');
+  cardEl.className = 'card' + (isCrossing ? ' crossing' : '');
+  cardEl.title = `${pos.label}: ${card.name}`;
+  cardEl.onclick = () => showDetail(card, pos);
+
+  const img = document.createElement('img');
+  img.src = card.image;
+  img.alt = card.name;
+
+  // 画像読み込み失敗時フォールバック
+  const fallback = document.createElement('div');
+  fallback.className = 'card-fallback';
+  fallback.style.display = 'none';
+  fallback.innerHTML = `<span class="card-number">${pos.label}</span><span class="card-name-text">${card.name}</span>`;
+
+  img.onerror = function() {
+    this.style.display = 'none';
+    fallback.style.display = 'flex';
+  };
+
+  cardEl.appendChild(img);
+  cardEl.appendChild(fallback);
+  slot.appendChild(cardEl);
+
+  // 位置ラベル（クロッシングカードには付けない）
+  if (!isCrossing) {
+    const lbl = document.createElement('span');
+    lbl.className = 'pos-label';
+    lbl.textContent = pos.label;
+    slot.appendChild(lbl);
+  }
+
+  return slot;
+}
+
+// ============================================================
+// 5. スプレッド描画
+// ============================================================
+
+let currentCards = [];
+
+function doReading() {
+  const cards = drawTen();
+  currentCards = cards;
+  const crossGrid = document.getElementById('cross-grid');
+  const staffGrid = document.getElementById('staff-grid');
+  crossGrid.innerHTML = '';
+  staffGrid.innerHTML = '';
+
+  // --- 十字グリッド (3×3) ---
+  // 空セル配置用ヘルパー
+  function empty(col, row) {
+    const d = document.createElement('div');
+    d.style.cssText = `grid-column:${col};grid-row:${row}`;
+    crossGrid.appendChild(d);
+  }
+
+  // (1,1) 空
+  empty(1, 1);
+  // (2,1) ポジション5「可能性」（上）
+  const slot5 = makeCard(cards[4], 4);
+  slot5.style.cssText = 'grid-column:2;grid-row:1';
+  crossGrid.appendChild(slot5);
+  // (3,1) 空
+  empty(3, 1);
+
+  // (1,2) ポジション4「過去」（左）
+  const slot4 = makeCard(cards[3], 3);
+  slot4.style.cssText = 'grid-column:1;grid-row:2';
+  crossGrid.appendChild(slot4);
+
+  // (2,2) ポジション1+2「現状」+「障害」（中央、重ねる）
+  const overlaySlot = document.createElement('div');
+  overlaySlot.className = 'card-slot overlay';
+  overlaySlot.style.cssText = 'grid-column:2;grid-row:2;position:relative;';
+
+  // カード1（下）
+  const card1 = cards[0];
+  const card1El = document.createElement('div');
+  card1El.className = 'card';
+  card1El.title = `${POSITIONS[0].label}: ${card1.name}`;
+  card1El.onclick = () => showDetail(card1, POSITIONS[0]);
+  appendCardContent(card1El, card1, POSITIONS[0].label);
+  overlaySlot.appendChild(card1El);
+
+  // カード2（上、90度回転）
+  const card2 = cards[1];
+  const card2El = document.createElement('div');
+  card2El.className = 'card crossing';
+  card2El.title = `${POSITIONS[1].label}: ${card2.name}`;
+  card2El.onclick = () => showDetail(card2, POSITIONS[1]);
+  appendCardContent(card2El, card2, POSITIONS[1].label);
+  overlaySlot.appendChild(card2El);
+
+  const lbl1 = document.createElement('span');
+  lbl1.className = 'pos-label';
+  lbl1.textContent = '①②';
+  overlaySlot.appendChild(lbl1);
+  crossGrid.appendChild(overlaySlot);
+
+  // (3,2) ポジション6「近い未来」（右）
+  const slot6 = makeCard(cards[5], 5);
+  slot6.style.cssText = 'grid-column:3;grid-row:2';
+  crossGrid.appendChild(slot6);
+
+  // (1,3) 空
+  empty(1, 3);
+  // (2,3) ポジション3「基盤」（下）
+  const slot3 = makeCard(cards[2], 2);
+  slot3.style.cssText = 'grid-column:2;grid-row:3';
+  crossGrid.appendChild(slot3);
+  // (3,3) 空
+  empty(3, 3);
+
+  // --- スタッフ縦列（右、下から7,8,9,10）---
+  const staffMap = [
+    { card: cards[6], posIdx: 6, row: 4 }, // 7
+    { card: cards[7], posIdx: 7, row: 3 }, // 8
+    { card: cards[8], posIdx: 8, row: 2 }, // 9
+    { card: cards[9], posIdx: 9, row: 1 }, // 10
+  ];
+  for (const s of staffMap) {
+    const sl = makeCard(s.card, s.posIdx);
+    sl.style.cssText = `grid-row:${s.row}`;
+    staffGrid.appendChild(sl);
+  }
+
+  document.getElementById('spread').style.display = 'block';
+  document.getElementById('detail').style.display = 'none';
+  document.getElementById('ai-btn-group').style.display = 'flex';
+  document.getElementById('btn-generate-cert').style.display = 'inline-block';
+  document.getElementById('error-msg').style.display = 'none';
+  document.getElementById('ai-result-section').style.display = 'none';
+  document.getElementById('cert-section').style.display = 'none';
+  document.getElementById('spread').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function appendCardContent(cardEl, card, posLabel) {
+  const img = document.createElement('img');
+  img.src = card.image;
+  img.alt = card.name;
+  const fallback = document.createElement('div');
+  fallback.className = 'card-fallback';
+  fallback.style.display = 'none';
+  fallback.innerHTML = `<span class="card-number">${posLabel}</span><span class="card-name-text">${card.name}</span>`;
+  img.onerror = function() {
+    this.style.display = 'none';
+    fallback.style.display = 'flex';
+  };
+  cardEl.appendChild(img);
+  cardEl.appendChild(fallback);
+}
+
+// ============================================================
+// 6. カード詳細パネル
+// ============================================================
+
+function showDetail(card, pos) {
+  document.getElementById('detail-name').textContent = card.name;
+  document.getElementById('detail-pos').textContent = `${pos.label} — ${pos.desc}`;
+  document.getElementById('detail-meaning').textContent = card.meaning;
+  const panel = document.getElementById('detail');
+  panel.style.display = 'block';
+  panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+// ============================================================
+// 7. APIキー管理 (localStorage)
+// ============================================================
+
+const KEY_STORAGE = 'tarot_gemini_api_key';
+
+(function restoreKey() {
+  const saved = localStorage.getItem(KEY_STORAGE);
+  if (saved) document.getElementById('api-key-input').value = saved;
+})();
+
+function toggleKeyVisibility() {
+  const inp = document.getElementById('api-key-input');
+  const btn = document.querySelector('.btn-toggle-key');
+  if (inp.type === 'password') {
+    inp.type = 'text';
+    btn.textContent = '隠す';
+  } else {
+    inp.type = 'password';
+    btn.textContent = '表示';
+  }
+}
+
+// ============================================================
+// 8. Gemini API 呼び出し
+// ============================================================
+
+function buildPrompt(query, cards) {
+  const cardLines = cards.map((c, i) => {
+    const pos = POSITIONS[i];
+    return `${pos.label}（${pos.desc}）: 【${c.name}】`;
+  }).join('\n');
+
+  return `あなたはプロのタロットリーダーです。以下の相談内容とケルト十字スプレッドの結果をもとに、相談者に深く寄り添った丁寧なリーディングを行ってください。
+
+【相談内容】
+${query || '（相談内容の記載なし）'}
+
+【展開されたカード — ケルト十字法】
+${cardLines}
+
+---
+以下の構成で、後から編集しやすいよう各セクションを見出しで明確に区切り、リーディング結果を日本語で返してください。
+
+重要: 出力は**プレーンテキストのみ**で返してください。マークダウン記法（**太字**、*斜体*、# 見出し、- 箇条書き、\`コード\`、> 引用など）は一切使わず、装飾記号なしの普通の文章として書いてください。セクション区切りは下記の「【見出し】」のみを使用してください。
+
+【タイトル】
+この占いにふさわしい短いタイトル（1〜2行）
+
+【全体運】
+スプレッド全体から読み取れる大きなテーマ・エネルギーの流れを200〜300字で解説
+
+【各カードの解釈】
+10枚それぞれについて、ポジションの意味とカードの象徴を結びつけて各100〜150字で解説
+（例: ①現状 — 魔術師: …）
+
+【アドバイス】
+相談者が今後どう行動すべきか、背中を押す言葉で150〜200字のアドバイス`;
+}
+
+async function callGemini(apiKey, prompt) {
+  const model = document.getElementById('model-select').value;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+  const body = {
+    contents: [{ parts: [{ text: prompt }] }],
+    generationConfig: { temperature: 0.85, maxOutputTokens: 4096 }
+  };
+
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    const msg = err?.error?.message || `HTTP ${res.status}`;
+    throw new Error(msg);
+  }
+
+  const data = await res.json();
+  return data.candidates?.[0]?.content?.parts?.[0]?.text ?? '（レスポンスが空でした）';
+}
+
+async function doAIReading() {
+  const btn       = document.getElementById('btn-ai-reading');
+  const loadingEl = document.getElementById('loading-row');
+  const errorEl   = document.getElementById('error-msg');
+  const resultSec = document.getElementById('ai-result-section');
+
+  function showErr(msg) {
+    errorEl.textContent = msg;
+    errorEl.style.display = 'block';
+    errorEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  // ---- 即座にボタンをローディング状態へ ----
+  btn.disabled = true;
+  btn.textContent = '生成中…';
+  loadingEl.style.display = 'flex';
+  errorEl.style.display = 'none';
+  resultSec.style.display = 'none';
+
+  try {
+    const apiKey = document.getElementById('api-key-input').value.trim();
+    if (!apiKey) {
+      showErr('Gemini API キーを入力してください。');
+      return;
+    }
+    if (currentCards.length !== 10) {
+      showErr('先にカードを引いてください。');
+      return;
+    }
+
+    try { localStorage.setItem(KEY_STORAGE, apiKey); } catch (_) {}
+
+    const query  = document.getElementById('user-query').value.trim();
+    const prompt = buildPrompt(query, currentCards);
+    const result = await callGemini(apiKey, prompt);
+
+    document.getElementById('ai-result-textarea').value = result;
+    resultSec.style.display = 'block';
+    resultSec.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+  } catch (e) {
+    showErr(`エラー: ${e.message}`);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '✦ Gemini でリーディングを生成';
+    loadingEl.style.display = 'none';
+  }
+}
+
+function showError(msg) {
+  const el = document.getElementById('error-msg');
+  el.textContent = msg;
+  el.style.display = 'block';
+}
+
+function showPrompt() {
+  if (currentCards.length !== 10) {
+    alert('先にカードを引いてください。');
+    return;
+  }
+  const query = document.getElementById('user-query').value.trim();
+  const prompt = buildPrompt(query, currentCards);
+  const ta = document.getElementById('prompt-textarea');
+  ta.value = prompt;
+  document.getElementById('prompt-section').style.display = 'block';
+
+  // 結果貼り付け用エリアも開く
+  document.getElementById('ai-result-section').style.display = 'block';
+  document.getElementById('ai-result-textarea').placeholder = 'Gemini の返答をここに貼り付けてください…';
+
+  // スクロールして全選択
+  document.getElementById('prompt-section').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  setTimeout(() => { ta.focus(); ta.select(); }, 300);
+}
+
+function selectPromptText() {
+  const ta = document.getElementById('prompt-textarea');
+  ta.focus();
+  ta.select();
+  // クリップボードAPIが使えれば試す、ダメでも選択済みなのでCtrl+Cで可
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(ta.value).catch(() => {});
+  } else {
+    try { document.execCommand('copy'); } catch (_) {}
+  }
+}
+
+// ============================================================
+// 10. 鑑定書プレビュー生成
+// ============================================================
+
+function generateCertificate() {
+  if (currentCards.length !== 10) {
+    alert('先にカードを引いてください。');
+    return;
+  }
+  const readingText = document.getElementById('ai-result-textarea').value.trim();
+  if (!readingText) {
+    alert('リーディング結果を先に入力・生成してください。');
+    return;
+  }
+
+  // 日付
+  const now = new Date();
+  const dateStr = `${now.getFullYear()}. ${String(now.getMonth()+1).padStart(2,'0')}. ${String(now.getDate()).padStart(2,'0')}`;
+  document.getElementById('cert-date').textContent = dateStr;
+
+  // 相談内容
+  const query = document.getElementById('user-query').value.trim() || '（相談内容の記載なし）';
+  document.getElementById('cert-query').textContent = query;
+
+  // ケルト十字を鑑定書内に描画
+  renderCertSpread(currentCards);
+
+  // リーディング本文をセクションに分解
+  renderCertReading(readingText);
+
+  // 表示 & スクロール
+  document.getElementById('cert-section').style.display = 'block';
+  // シェア対応機なら画像共有ボタン表示（iOS Safari で写真に保存可能）
+  if (navigator.share || navigator.canShare) {
+    document.getElementById('btn-share').style.display = 'inline-block';
+  }
+  document.getElementById('cert-section').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+async function shareCertificate() {
+  const btn = document.getElementById('btn-share');
+  const cert = document.getElementById('certificate');
+  if (!cert || cert.offsetHeight === 0) {
+    alert('先に鑑定書プレビューを作成してください。');
+    return;
+  }
+  const orig = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = '画像生成中…';
+  try {
+    const imgs = cert.querySelectorAll('img');
+    await Promise.all([...imgs].map(img =>
+      img.complete ? Promise.resolve() :
+      new Promise(res => { img.onload = res; img.onerror = res; })
+    ));
+    const canvas = await html2canvas(cert, {
+      scale: 2, useCORS: true, allowTaint: true,
+      backgroundColor: '#faf6ec', logging: false,
+    });
+    const blob = await new Promise(r => canvas.toBlob(r, 'image/jpeg', 0.95));
+    const ts = new Date();
+    const fname = `tarot_${ts.getFullYear()}${String(ts.getMonth()+1).padStart(2,'0')}${String(ts.getDate()).padStart(2,'0')}.jpg`;
+    const file = new File([blob], fname, { type: 'image/jpeg' });
+
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      await navigator.share({ files: [file], title: 'タロット鑑定書' });
+    } else {
+      // フォールバック: ダウンロード
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = fname;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }
+  } catch (e) {
+    if (e.name !== 'AbortError') alert('共有に失敗しました: ' + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = orig;
+  }
+}
+
+function renderCertSpread(cards) {
+  const crossGrid = document.getElementById('cert-cross-grid');
+  const staffGrid = document.getElementById('cert-staff-grid');
+  crossGrid.innerHTML = '';
+  staffGrid.innerHTML = '';
+
+  function makeCertCard(card, posIdx, isCrossing = false) {
+    const pos = POSITIONS[posIdx];
+    const cardEl = document.createElement('div');
+    cardEl.className = 'cert-card' + (isCrossing ? ' crossing' : '');
+
+    const img = document.createElement('img');
+    img.src = card.image;
+    img.crossOrigin = 'anonymous';
+    img.alt = card.name;
+
+    const fb = document.createElement('div');
+    fb.className = 'cert-card-fb';
+    fb.style.display = 'none';
+    fb.innerHTML = `<span class="cn">${pos.label}</span><span class="cname">${card.name}</span>`;
+
+    img.onerror = function() { this.style.display = 'none'; fb.style.display = 'flex'; };
+    cardEl.appendChild(img);
+    cardEl.appendChild(fb);
+    return cardEl;
+  }
+
+  function makeSlot(card, posIdx, gridCol, gridRow) {
+    const slot = document.createElement('div');
+    slot.className = 'cert-card-slot';
+    slot.style.cssText = `grid-column:${gridCol};grid-row:${gridRow}`;
+    slot.appendChild(makeCertCard(card, posIdx));
+    const lbl = document.createElement('span');
+    lbl.className = 'cert-pos-label';
+    lbl.textContent = POSITIONS[posIdx].label;
+    slot.appendChild(lbl);
+    return slot;
+  }
+
+  function emptyCell(col, row) {
+    const d = document.createElement('div');
+    d.style.cssText = `grid-column:${col};grid-row:${row}`;
+    crossGrid.appendChild(d);
+  }
+
+  // 十字: 5=上, 4=左, 1+2=中央, 6=右, 3=下
+  emptyCell(1,1);
+  crossGrid.appendChild(makeSlot(cards[4], 4, 2, 1));
+  emptyCell(3,1);
+  crossGrid.appendChild(makeSlot(cards[3], 3, 1, 2));
+
+  // 中央：1+2 オーバーレイ
+  const centerSlot = document.createElement('div');
+  centerSlot.className = 'cert-card-slot';
+  centerSlot.style.cssText = 'grid-column:2;grid-row:2';
+  centerSlot.appendChild(makeCertCard(cards[0], 0, false));
+  centerSlot.appendChild(makeCertCard(cards[1], 1, true));
+  const lbl12 = document.createElement('span');
+  lbl12.className = 'cert-pos-label';
+  lbl12.textContent = '①②';
+  centerSlot.appendChild(lbl12);
+  crossGrid.appendChild(centerSlot);
+
+  crossGrid.appendChild(makeSlot(cards[5], 5, 3, 2));
+  emptyCell(1,3);
+  crossGrid.appendChild(makeSlot(cards[2], 2, 2, 3));
+  emptyCell(3,3);
+
+  // 右の縦4枚: 下から7,8,9,10
+  staffGrid.appendChild(makeSlot(cards[6], 6, 1, 4));
+  staffGrid.appendChild(makeSlot(cards[7], 7, 1, 3));
+  staffGrid.appendChild(makeSlot(cards[8], 8, 1, 2));
+  staffGrid.appendChild(makeSlot(cards[9], 9, 1, 1));
+}
+
+function renderCertReading(text) {
+  // 【見出し】で分割
+  const sections = [];
+  const regex = /【([^】]+)】/g;
+  const matches = [...text.matchAll(regex)];
+
+  if (matches.length === 0) {
+    sections.push({ title: 'リーディング', body: text });
+  } else {
+    for (let i = 0; i < matches.length; i++) {
+      const start = matches[i].index + matches[i][0].length;
+      const end = (i + 1 < matches.length) ? matches[i+1].index : text.length;
+      const body = text.slice(start, end).trim();
+      sections.push({ title: matches[i][1].trim(), body });
+    }
+  }
+
+  const container = document.getElementById('cert-reading');
+  container.innerHTML = '';
+  for (const s of sections) {
+    const sec = document.createElement('div');
+    sec.className = 'cert-section';
+    const h = document.createElement('h3');
+    h.textContent = s.title;
+    const p = document.createElement('p');
+    p.textContent = s.body;
+    sec.appendChild(h);
+    sec.appendChild(p);
+    container.appendChild(sec);
+  }
+}
+
+// ============================================================
+// 11. PDF ダウンロード
+// ============================================================
+
+async function downloadPDF() {
+  const btn = document.getElementById('btn-download-pdf');
+  const cert = document.getElementById('certificate');
+  if (!cert || cert.offsetHeight === 0) {
+    alert('先に鑑定書プレビューを作成してください。');
+    return;
+  }
+
+  btn.disabled = true;
+  const origLabel = btn.textContent;
+  btn.textContent = 'PDF 生成中…';
+
+  try {
+    // 画像ロード完了を待つ
+    const imgs = cert.querySelectorAll('img');
+    await Promise.all([...imgs].map(img =>
+      img.complete ? Promise.resolve() :
+      new Promise(res => { img.onload = res; img.onerror = res; })
+    ));
+
+    const canvas = await html2canvas(cert, {
+      scale: 2,
+      useCORS: true,
+      allowTaint: true,
+      backgroundColor: '#faf6ec',
+      logging: false,
+    });
+
+    const imgData = canvas.toDataURL('image/jpeg', 0.95);
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+
+    const pageW = 210;
+    const pageH = 297;
+    const imgW = pageW;
+    const imgH = (canvas.height * imgW) / canvas.width;
+
+    if (imgH <= pageH) {
+      pdf.addImage(imgData, 'JPEG', 0, 0, imgW, imgH);
+    } else {
+      // 複数ページに分割
+      let remaining = imgH;
+      let offset = 0;
+      while (remaining > 0) {
+        pdf.addImage(imgData, 'JPEG', 0, -offset, imgW, imgH);
+        remaining -= pageH;
+        offset += pageH;
+        if (remaining > 0) pdf.addPage();
+      }
+    }
+
+    const ts = new Date();
+    const fname = `tarot_reading_${ts.getFullYear()}${String(ts.getMonth()+1).padStart(2,'0')}${String(ts.getDate()).padStart(2,'0')}_${String(ts.getHours()).padStart(2,'0')}${String(ts.getMinutes()).padStart(2,'0')}.pdf`;
+    pdf.save(fname);
+  } catch (e) {
+    alert('PDF 生成に失敗しました: ' + e.message);
+    console.error(e);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = origLabel;
+  }
+}
+
+function copyResult() {
+  const ta = document.getElementById('ai-result-textarea');
+  navigator.clipboard.writeText(ta.value).then(() => {
+    const btn = document.querySelector('.btn-copy');
+    const orig = btn.textContent;
+    btn.textContent = 'コピー完了！';
+    setTimeout(() => { btn.textContent = orig; }, 1800);
+  });
+}
+</script>
+</body>
+</html>
